@@ -13,3 +13,4 @@ from .preact_resnet import *
 from .mobilenet import *
 from .mobilenetv2 import *
 from .efficientnet import *
+from .resnet_cifar import resnet_cifar110

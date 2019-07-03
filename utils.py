@@ -10,6 +10,7 @@ import math
 
 import torch.nn as nn
 import torch.nn.init as init
+import numpy as np
 
 
 def get_mean_and_std(dataset):
@@ -122,3 +123,6 @@ def format_time(seconds):
     if f == '':
         f = '0ms'
     return f
+
+def count_parameters_in_MB(model):
+    return np.sum(np.prod(v.size()) for v in model.parameters()) / 1e6

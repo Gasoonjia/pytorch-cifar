@@ -12,14 +12,18 @@ import os
 import argparse
 
 from models import *
-from utils import progress_bar
+from utils import progress_bar, count_parameters_in_MB
 
 
 parser = argparse.ArgumentParser(description='PyTorch CIFAR10 Training')
 parser.add_argument('--lr', default=0.1, type=float, help='learning rate')
 parser.add_argument('--batch_size', default=128, type=int, help='batch_size')
 parser.add_argument('--resume', '-r', action='store_true', help='resume from checkpoint')
+parser.add_argument('--data', type=str, default='/home/gasoon/dataset/',
+                    help='location of the data corpus relative to home')
 args = parser.parse_args()
+
+args.lr *= args.batch_size / 256
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 best_acc = 0  # best test accuracy
@@ -39,10 +43,10 @@ transform_test = transforms.Compose([
     transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
 ])
 
-trainset = torchvision.datasets.CIFAR10(root='./data', train=True, download=True, transform=transform_train)
+trainset = torchvision.datasets.CIFAR10(root=args.data, train=True, download=True, transform=transform_train)
 trainloader = torch.utils.data.DataLoader(trainset, batch_size=args.batch_size, shuffle=True, num_workers=2)
 
-testset = torchvision.datasets.CIFAR10(root='./data', train=False, download=True, transform=transform_test)
+testset = torchvision.datasets.CIFAR10(root=args.data, train=False, download=True, transform=transform_test)
 testloader = torch.utils.data.DataLoader(testset, batch_size=args.batch_size, shuffle=False, num_workers=2)
 
 classes = ('plane', 'car', 'bird', 'cat', 'deer', 'dog', 'frog', 'horse', 'ship', 'truck')
@@ -50,6 +54,7 @@ classes = ('plane', 'car', 'bird', 'cat', 'deer', 'dog', 'frog', 'horse', 'ship'
 # Model
 print('==> Building model..')
 # net = VGG('VGG19')
+net = resnet_cifar110(pool_first=True, dynamic_pool=True)
 # net = ResNet18()
 # net = PreActResNet18()
 # net = GoogLeNet()
@@ -61,11 +66,13 @@ print('==> Building model..')
 # net = ShuffleNetG2()
 # net = SENet18()
 # net = ShuffleNetV2(1)
-net = EfficientNetB0()
+# net = EfficientNetB0()
 if device == 'cuda':
     net = net.cuda()
     net = torch.nn.DataParallel(net)
     cudnn.benchmark = True
+
+print('==> Done. Param size = {:.4f}MB'.format(count_parameters_in_MB(net)))
 
 if args.resume:
     # Load checkpoint.
