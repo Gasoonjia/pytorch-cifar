@@ -12,18 +12,25 @@ import os
 import argparse
 
 from models import *
-from utils import progress_bar, count_parameters_in_MB
+from utils import progress_bar, count_parameters_in_MB, save_checkpoint
+from tensorboardX import SummaryWriter
+import time
 
 
 parser = argparse.ArgumentParser(description='PyTorch CIFAR10 Training')
-parser.add_argument('--lr', default=0.1, type=float, help='learning rate')
-parser.add_argument('--batch_size', default=128, type=int, help='batch_size')
+parser.add_argument('--lr', default=0.1, type=float, help='learning rate when batch size=256')
+parser.add_argument('--batch_size', default=256, type=int, help='batch_size')
+parser.add_argument('--total_epoch', default=350, type=int, help='batch_size')
 parser.add_argument('--resume', '-r', action='store_true', help='resume from checkpoint')
 parser.add_argument('--data', type=str, default='/home/gasoon/dataset/',
                     help='location of the data corpus relative to home')
 args = parser.parse_args()
 
 args.lr *= args.batch_size / 256
+save_file = 'ckpts/{}'.format(time.strftime("%m%d_%H%M%S"))
+os.makedirs(save_file)
+
+writer = SummaryWriter()
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 best_acc = 0  # best test accuracy
@@ -44,10 +51,10 @@ transform_test = transforms.Compose([
 ])
 
 trainset = torchvision.datasets.CIFAR10(root=args.data, train=True, download=True, transform=transform_train)
-trainloader = torch.utils.data.DataLoader(trainset, batch_size=args.batch_size, shuffle=True, num_workers=2)
+trainloader = torch.utils.data.DataLoader(trainset, batch_size=args.batch_size, shuffle=True, num_workers=8)
 
 testset = torchvision.datasets.CIFAR10(root=args.data, train=False, download=True, transform=transform_test)
-testloader = torch.utils.data.DataLoader(testset, batch_size=args.batch_size, shuffle=False, num_workers=2)
+testloader = torch.utils.data.DataLoader(testset, batch_size=args.batch_size, shuffle=False, num_workers=8)
 
 classes = ('plane', 'car', 'bird', 'cat', 'deer', 'dog', 'frog', 'horse', 'ship', 'truck')
 
@@ -85,10 +92,12 @@ if args.resume:
 
 criterion = nn.CrossEntropyLoss()
 optimizer = optim.SGD(net.parameters(), lr=args.lr, momentum=0.9, weight_decay=5e-4)
+scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[150, 250, 350])
 
 # Training
 def train(epoch):
-    print('\nEpoch: %d' % epoch)
+    scheduler.step()
+    print('\nEpoch: %d , LR = %e'% (epoch, scheduler.get_lr()[0]))
     net.train()
     train_loss = 0
     correct = 0
@@ -108,6 +117,10 @@ def train(epoch):
 
         progress_bar(batch_idx, len(trainloader), 'Loss: %.3f | Acc: %.3f%% (%d/%d)'
             % (train_loss/(batch_idx+1), 100.*correct/total, correct, total))
+    
+    train_acc = 100.*correct/total
+    writer.add_scalar('train acc', train_acc, epoch)
+
 
 def test(epoch):
     global best_acc
@@ -130,20 +143,16 @@ def test(epoch):
                 % (test_loss/(batch_idx+1), 100.*correct/total, correct, total))
 
     # Save checkpoint.
-    acc = 100.*correct/total
-    if acc > best_acc:
-        print('Saving..')
-        state = {
-            'net': net.state_dict(),
-            'acc': acc,
-            'epoch': epoch,
-        }
-        if not os.path.isdir('checkpoint'):
-            os.mkdir('checkpoint')
-        torch.save(state, './checkpoint/ckpt.pth')
-        best_acc = acc
+    test_acc = 100.*correct/total
+    is_best = False
+    if test_acc > best_acc:
+        is_best = True
+        best_acc = test_acc
+    save_checkpoint(net, is_best, save_file, epoch)
+    writer.add_scalar('test acc', test_acc, epoch)
+    print("Best acc: %.3f%%" % best_acc)
 
 
-for epoch in range(start_epoch, start_epoch+200):
+for epoch in range(start_epoch, args.total_epoch):
     train(epoch)
     test(epoch)

@@ -8,9 +8,11 @@ import sys
 import time
 import math
 
+import torch
 import torch.nn as nn
 import torch.nn.init as init
 import numpy as np
+import shutil
 
 
 def get_mean_and_std(dataset):
@@ -126,3 +128,14 @@ def format_time(seconds):
 
 def count_parameters_in_MB(model):
     return np.sum(np.prod(v.size()) for v in model.parameters()) / 1e6
+
+def save_checkpoint(model, is_best, save_path, n_epoch):
+    filename = os.path.join(save_path, 'last.pth')
+    state = {
+        'net': model.state_dict(),
+        'n_epoch': n_epoch
+    }
+    torch.save(state, filename)
+    if is_best:
+        best_filename = os.path.join(save_path, 'best.pth')
+        shutil.copyfile(filename, best_filename)
